@@ -31,12 +31,14 @@ cloudflare-mcp/
 │   │   ├── oauth-handler.ts       # OAuth authorization flow
 │   │   ├── scopes.ts              # OAuth scope definitions (120+ scopes)
 │   │   └── workers-oauth-utils.ts # OAuth provider helpers
-│   └── tests/
-│       ├── index.test.ts
-│       ├── auth/
-│       ├── executor.test.ts
-│       ├── spec-processor.test.ts
-│       └── truncate.test.ts
+├── tests/                         # Vitest suite (top-level, mirrors src/)
+│   ├── index.test.ts
+│   ├── auth/
+│   ├── executor.test.ts
+│   ├── spec-processor.test.ts
+│   ├── truncate.test.ts
+│   └── e2e/                       # End-to-end tests (real worker via exports.default.fetch)
+│       └── tool-call.test.ts
 ├── scripts/
 │   └── seed-r2.ts                 # Seed OpenAPI spec to R2 bucket
 ├── .github/workflows/
@@ -146,19 +148,36 @@ Tool usage is tracked via the `MCP_METRICS` Analytics Engine binding into the sh
 
 ## Testing
 
-Tests use **vitest** with `@cloudflare/vitest-pool-workers`.
+Tests live in the top-level `tests/` directory (mirroring `src/`) and use **vitest** with `@cloudflare/vitest-pool-workers`.
 
 ```bash
 npm run test          # Single run
 npm run test:watch    # Watch mode
 ```
 
-**Test coverage areas:**
+**Unit/integration coverage areas:**
 - Scheduled handler (spec fetching & processing)
 - Auth token detection and parsing
 - Auth props building and validation
 - Spec processor ($ref resolution, product extraction)
 - Response truncation
+- Metrics event mapping & path normalization
+
+**End-to-end (`tests/e2e/`):**
+Drives the real worker via `exports.default.fetch()` (from `cloudflare:workers`), the
+pattern from the [Cloudflare vitest recipes](https://developers.cloudflare.com/workers/testing/vitest-integration/recipes/).
+A full JSON-RPC `tools/call` for `execute` runs real code inside a Worker Loader
+isolate and is forwarded through the real `GlobalOutbound` proxy. The **only** mock
+is outbound `fetch()`, declared with **MSW** (`server.use(http.get(...))`) — see
+`tests/e2e/msw-server.ts` and `tests/e2e/msw-setup.ts`. MSW intercepts both the
+auth-guard `/user`+`/accounts` probes and the GlobalOutbound-forwarded API call.
+Everything else — auth, MCP transport, tool dispatch, Worker Loader — is the real
+code path.
+
+The test stack is **vitest 4 + `@cloudflare/vitest-pool-workers` 0.16** using the
+`cloudflareTest()` Vite plugin (required for MSW's `msw/node` to load under
+workerd). Note: storage isolation is per test **file** (not per test), so tests
+sharing real bindings (e.g. `OAUTH_KV`) must clear state in `afterEach`.
 
 ## Contributing
 

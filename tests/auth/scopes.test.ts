@@ -5,7 +5,7 @@ import {
   REQUIRED_SCOPES,
   DEFAULT_TEMPLATE,
   MAX_SCOPES
-} from '../../auth/scopes'
+} from '../../src/auth/scopes'
 
 /**
  * Scopes registered for the OAuth client.
